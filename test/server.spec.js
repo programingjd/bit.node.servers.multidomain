@@ -4,6 +4,9 @@ const http2 = require('http2');
 const assert = require('assert');
 const Server = require('../server');
 
+const httpPort = 8080;
+const httpsPort = 8181;
+
 /**
  * Http methods.
  * @readonly
@@ -24,32 +27,62 @@ const Methods={
 
 /**
  * Performs an http request to the local server.
- * @param {string} domain
- * @param {string} path
+ * @param {string} url
  * @param {Methods=} method
  * @param {Object<string,string>?} extraHeaders
  * @returns {Promise<Response>}
  */
-const request=(domain,path,method=Methods.get,extraHeaders)=>new Promise((resolve,reject)=>{
+const request=(url,method=Methods.get,extraHeaders)=>new Promise((resolve,reject)=>{
   if(extraHeaders) options.headers = extraHeaders;
-  const session = http2.connect(domain, { rejectUnauthorized: false });
-  const request = session.request({
-    ':method': method.toUpperCase(),
-    ':path': path
-  });
-  //const request = http2.request(url,options);
+  const i = url.indexOf('://');
+  const proto = url.substring(0,i);
+  const j = url.indexOf('/', i+3);
+  const authority = j===-1 ? url.substring(i+3) : url.substring(i+3,j);
+  const path = j===-1 ? '/' : url.substring(j);
+  const [ request, close ] = (()=>{
+    if(proto==='http'){
+      const k = authority.indexOf(':');
+      const hostname = k===-1 ? authority : authority.substring(0, k);
+      const port = k===-1 ? 80 : authority.substring(k+1);
+      const request = http.request({
+        host: hostname,
+        port: port,
+        path: path,
+        method: method.toUpperCase()
+      });
+      return [ request, ()=>{} ];
+    }
+    else{
+      const session = http2.connect(`${proto}://${authority}`, { rejectUnauthorized: false });
+      const request = session.request({
+        ':method': method.toUpperCase(),
+        ':path': path
+      });
+      return [ request, ()=>session.close() ];
+    }
+  })();
   const data = [];
   let status = 0;
   let headers = new Map();
   let error = undefined;
   request.on('error', e=>error=e);
-  request.on('response', (it)=>{
-    status = it[':status'];
-    Object.keys(it).forEach(h=>{
-      if(h[0]!==':') headers.set(h,it[h]);
-    });
+  request.on('response', it=>{
+    if(proto==='http'){
+      status = it.statusCode;
+      Object.keys(it.headers).forEach(h=>{
+        headers.set(h,it.headers[h]);
+      });
+      it.on('data',it=>data.push(it));
+    }
+    else{
+      status = it[':status'];
+      Object.keys(it).forEach(h=>{
+        if(h[0]!==':') headers.set(h,it[h]);
+      });
+      request.on('data',it=>data.push(it));
+
+    }
   });
-  request.on('data', it=>data.push(it));
   request.on('close', ()=>{
     if (error) reject(error);
     resolve(
@@ -59,7 +92,7 @@ const request=(domain,path,method=Methods.get,extraHeaders)=>new Promise((resolv
         body: Buffer.concat(data)
       }
     );
-    session.close();
+    close();
   });
   request.setTimeout(1000).end();
 });
@@ -68,14 +101,14 @@ let server;
 
 const handler = (request,response,hostname,remoteAddress,local,serverInstance)=>{
   response.writeHead(200, { 'Content-Type': 'application/json' });
-  response.end(JSON.stringify({
-    method: request.method,
+  response.write(JSON.stringify({
+    method: request.method.toLowerCase(),
     url: request.url,
-    port: request.port,
     remoteAddress: remoteAddress,
     local: local,
     server: serverInstance === server
   }));
+  response.end();
 };
 
 const domain1 = {
@@ -108,15 +141,17 @@ before(async()=>{
     }
     return dnsLookup.call(this,hostname,options,callback);
   };
-  server = Server();
+  server = Server(httpPort, httpsPort);
   await Promise.all(domains.map(it=>server.addServer(it)));
 });
 
 describe('Test domains', ()=>{
   it('should call us', async()=>{
-    const response = await request('https://domain1.com', '/', Methods.head);
-    console.log(response.headers);
-    console.log(response.body.toString());
+    const response = await request(`https://domain1.com:${httpsPort}`, Methods.get);
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.headers.get('content-type'), 'application/json');
+    const body = JSON.parse(response.body.toString());
+    assert.strictEqual(body.method, 'get');
   });
 });
 
