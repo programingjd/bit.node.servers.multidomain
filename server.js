@@ -17,12 +17,12 @@ const systemdSecondSocket=()=>{
  * @param {number} [httpsPort=443]
  * @constructor
  */
-module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
+module.exports=(httpPort,httpsPort)=>{
   if(!httpPort) httpPort=systemdFirstSocket()||80;
   if (!httpsPort) httpsPort=systemdSecondSocket()||443;
   const http01='/.well-known/acme-challenge/';
   const servers={};
-  const multiServer={};
+  const server={};
   let ip=null;
   acme.axios({
     method: 'get',
@@ -30,7 +30,7 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
     headers: { Accept: '*/*', 'User-Agent': 'curl/7.52.1' },
     responseType: 'text'
   }).then(it=>ip=it.data.trim());
-  const server=http.createServer(
+  const httpServer=http.createServer(
     (request,response)=>{
       const remoteAddress=request.socket.remoteAddress.replace(/^::ffff:/,'');
       const hostname=request.headers.host;
@@ -46,7 +46,7 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
       }else if(ip!==null&&ip===remoteAddress&&path==='/update_certificate'){
         (async ()=>{
           try{
-            await multiServer.updateCertificate(hostname);
+            await server.updateCertificate(hostname);
             response.writeHead(200).end();
           }
           catch(err){
@@ -62,7 +62,7 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
       }
     }
   );
-  const tlsServer=http2.createSecureServer(
+  const httpsServer=http2.createSecureServer(
     {
       allowHTTP1: true,
       key: null,
@@ -85,7 +85,7 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
           hostname,
           remoteAddress,
           ip!==null&&ip===remoteAddress,
-          multiServer
+          server
         );
       }
       catch(err){
@@ -94,21 +94,21 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
       }
     }
   );
-  tlsServer.on('secureConnection',(socket)=>{
+  httpsServer.on('secureConnection',(socket)=>{
     if(!servers[socket.servername]) socket.disconnect();
   });
   /**
    * @type {number}
    */
-  multiServer.httpPort=httpPort;
+  server.httpPort=httpPort;
   /**
    * @type {number}
    */
-  multiServer.httpsPort=httpsPort;
+  server.httpsPort=httpsPort;
   /**
    * @returns {string[]}
    */
-  multiServer.servernames=()=>servers.flatMap(it=>it.hostnames);
+  server.servernames=()=>servers.flatMap(it=>it.hostnames);
   /**
    * @async
    * @param {
@@ -127,7 +127,7 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
    *   key:{path:string}}
    * } server
    */
-  multiServer.addServer=async server=>{
+  server.addServer=async server=>{
     const keyData=await fs.readFile(server.key.path);
     const certData=await fs.readFile(server.cert.path);
     await Promise.all(
@@ -153,18 +153,20 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
       })
     );
   };
-  let started=false;
-  let tlsStarted=false;
-  multiServer.stop=()=>{
-    if(!started) started=true; else server.stop();
-    if(!tlsStarted) tlsStarted=true; else tlsServer.stop();
+  let httpStarted=false;
+  let httpssStarted=false;
+  server.close=()=>{
+    const promises=[new Promise(r=>r())];
+    if(!httpStarted) httpStarted=true; else promises.push(new Promise(r=>httpServer.close(r)));
+    if(!httpssStarted) httpssStarted=true; promises.push(new Promise(r=>httpsServer.close(r)));
+    return Promise.all(promises);
   };
   /**
    * @async
    * @param {string} hostname
    * @returns {Promise<void>}
    */
-  multiServer.updateCertificate=async hostname=>{
+  server.updateCertificate=async hostname=>{
     if(!servers[hostname])return;
     const email=servers[hostname].acme.email;
     const hostnames=servers[hostname].hostnames;
@@ -226,18 +228,18 @@ module.exports.MultiDomainServer=(httpPort,httpsPort)=>{
     await fs.writeFile(servers[hostname].key.path,key);
     await fs.writeFile(servers[hostname].cert.path,cert);
   };
-  if(!started){
-    server.listen(httpPort,err=>{
+  if(!httpStarted){
+    httpServer.listen(httpPort,err=>{
       if(err) return console.log(err);
-      if(started) server.close(); else started=true;
+      if(httpStarted) httpServer.close(); else httpStarted=true;
     });
   }
-  if(!tlsStarted){
-    tlsServer.listen(httpsPort,err=>{
+  if(!httpssStarted){
+    httpsServer.listen(httpsPort,err=>{
       if(err) return console.log(err);
-      if(tlsStarted) tlsServer.close(); else tlsStarted=true;
+      if(httpssStarted) httpsServer.close(); else httpssStarted=true;
     });
   }
-  Object.freeze(multiServer);
-  return multiServer;
+  Object.freeze(server);
+  return server;
 };
