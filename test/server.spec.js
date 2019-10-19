@@ -130,7 +130,7 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
 
 let server;
 
-const handler1 = (request,response,hostname,remoteAddress,local,serverInstance)=>{
+const handler1 = (request,response,hostname,remoteAddress,serverInstance)=>{
   response.writeHead(200, { 'Content-Type': 'application/json', 'X-Test': 'test' });
   response.write(JSON.stringify({
     name: 'domain1',
@@ -149,6 +149,13 @@ const handler2 = (request,response,hostname)=>{
     response.writeHead(301, { 'Location': `https://domain2.com:${httpsPort}${request.path||request.headers[':path']}` });
   }else response.writeHead(200);
   response.end();
+};
+
+const handler3 = (request,response,hostname)=>{
+  if(hostname.indexOf('www.')===0){
+    response.writeHead(404);
+  }
+  throw new Error("test");
 };
 
 const domain1 = {
@@ -171,8 +178,18 @@ const domain2 = {
   },
   handler: handler2
 };
+const domain3 = {
+  hostnames: [ 'domain3.com', 'www.domain3.com' ],
+  key: {
+    path: 'test/domain3.key'
+  },
+  cert: {
+    path: 'test/domain3.cert'
+  },
+  handler: handler3
+};
 const domains = [
-  domain1, domain2
+  domain1, domain2, domain3
 ];
 
 before(async()=>{
@@ -372,6 +389,30 @@ describe('domain2', ()=>{
       const response = await request(`https://www.domain2.com:${httpsPort}`, Methods.get);
       assert.strictEqual(response.status, 301);
       assert.strictEqual(response.headers.get('location'), `https://domain2.com:${httpsPort}/`);
+    });
+  });
+});
+describe('domain3', ()=>{
+  describe('domain3.com', ()=>{
+    it('http head request to domain3.com', async()=>{
+      const response = await request(`http://domain3.com:${httpPort}`, Methods.head);
+      assert.strictEqual(response.status, 301);
+      assert.strictEqual(response.headers.get('location'), `https://domain3.com:${httpsPort}/`);
+    });
+    it('https get request to domain3.com', async()=>{
+      const response = await request(`https://domain3.com:${httpsPort}`, Methods.get);
+      assert.strictEqual(response.status, 500);
+    });
+  });
+  describe('www.domain3.com', ()=>{
+    it('http head request to www.domain3.com', async()=>{
+      const response = await request(`http://www.domain3.com:${httpPort}`, Methods.head);
+      assert.strictEqual(response.status, 301);
+      assert.strictEqual(response.headers.get('location'), `https://www.domain3.com:${httpsPort}/`);
+    });
+    it('https get request to www.domain3.com', async()=>{
+      const response = await request(`https://www.domain3.com:${httpsPort}`, Methods.get);
+      assert.strictEqual(response.status, 404);
     });
   });
 });

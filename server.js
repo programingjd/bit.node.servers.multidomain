@@ -87,7 +87,6 @@ module.exports=(httpPort,httpsPort)=>{
           response,
           hostname,
           remoteAddress,
-          '127.0.0.1'===remoteAddress,
           server
         );
       }
@@ -124,7 +123,6 @@ module.exports=(httpPort,httpsPort)=>{
    *     response:http2.Http2ServerResponse?,
    *     hostname:string?,
    *     remoteAddress:string?,
-   *     local:boolean?,
    *     server:MultiDomainServer?
    *   ),
    *   acme:{email:string},
