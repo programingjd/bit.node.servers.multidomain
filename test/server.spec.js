@@ -170,7 +170,10 @@ const domains = [
 before(async()=>{
   const dns = require('dns');
   const dnsLookup = dns.lookup;
-  const hostnames = new Set(domains.flatMap(it=>it.hostnames));
+  // const hostnames = new Set(domains.flatMap(it=>it.hostnames));
+  const hostnames = new Set();
+  domains.forEach(it=>it.hostnames.forEach(it=>hostnames.add(it)));
+  //domains.flatMap(it=>it.hostnames);
   dns.lookup = function(hostname,options,callback) {
     if (hostnames.has(hostname)){
       if(typeof options==='function'){
