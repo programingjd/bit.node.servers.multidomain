@@ -43,12 +43,17 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
   const path = j===-1 ? '/' : url.substring(j);
   const [ request, close ] = (()=>{
     if(proto==='https'&&!disableHttp2){
-      const session = http2.connect(`${proto}://${authority}`, {
-        ca: ca,
-        rejectUnauthorized: true,
-        requestCert: true,
-        agent: false
-      });
+      try{
+        const session=http2.connect(`${proto}://${authority}`,{
+          ca:ca,
+          rejectUnauthorized:true,
+          requestCert:true,
+          agent:false
+        });
+      }catch(error){
+        reject(error);
+        return [ null, null ];
+      }
       const request = session.request({
         ':method': method.toUpperCase(),
         ':path': path
@@ -84,6 +89,7 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
       }
     }
   })();
+  if (request === null) return;
   const data = [];
   let status = 0;
   let headers = new Map();
@@ -108,7 +114,7 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
   });
   request.on('close', ()=>{
     if (error) reject(error);
-    resolve(
+    else resolve(
       {
         status: status,
         headers: headers,
@@ -187,8 +193,22 @@ before(async()=>{
     return dnsLookup.call(this,hostname,options,callback);
   };
   server = Server(httpPort, httpsPort);
-  await Promise.all(domains.map(async it=>await server.addServer(it)));
   ca.push(await fs.readFile('test/ca.cert'));
+});
+
+describe('no domain defined', ()=>{
+  it('http head request to domain1.com', async()=>{
+    await assert.rejects(()=>request(`http://domain1.com:${httpPort}`, Methods.head));
+  });
+  it('https get request to domain2.com', async()=>{
+    await assert.rejects(()=>request(`https://domain2.com:${httpsPort}`, Methods.get));
+  });
+});
+
+describe('register domains', ()=>{
+  it('', async()=>{
+    await Promise.all(domains.map(async it=>await server.addServer(it)));
+  });
 });
 
 describe('domain1', ()=>{
