@@ -424,6 +424,17 @@ describe('domain3', ()=>{
     });
   });
 });
+describe('letsencrypt', ()=>{
+  before(async()=>{
+    if(server.hostnames().length===0) await Promise.all(domains.map(it=>server.addServer(it)));
+  });
+  describe('http01 challenge', ()=>{
+    it('http get call to .well-known/acme-challenge/token', async()=>{
+      const response = await request(`http://domain1.com:${httpPort}/.well-known/acme-challenge/token`, Methods.get);
+      assert.strictEqual(response.status, 404);
+    });
+  });
+});
 
 after(async ()=>{
   await server.close();
