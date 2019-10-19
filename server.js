@@ -23,34 +23,36 @@ module.exports=(httpPort,httpsPort)=>{
   const http01='/.well-known/acme-challenge/';
   const servers={};
   const server={};
-  let ip=null;
-  acme.axios({
-    method: 'get',
-    url: 'https://ifconfig.co',
-    headers: { Accept: '*/*', 'User-Agent': 'curl/7.52.1' },
-    responseType: 'text'
-  }).then(it=>ip=it.data.trim());
   const httpServer=http.createServer(
     (request,response)=>{
       const remoteAddress=request.socket.remoteAddress.replace(/^::ffff:/,'');
-      const hostname=request.headers.host;
+      const hostname=request.headers.host.replace(/:[0-9]+$/,'');
       if(!servers[hostname]) return request.socket.end();
       const path=request.url;
       if(path.indexOf(http01)===0){
         const token=(servers[hostname].acme||{}).token;
         if(path.substring(http01.length)===token){
-          response.writeHead(200).end((servers[hostname].acme||{}).key);
+          response.writeHead(200);
+          response.end((servers[hostname].acme||{}).key);
         }else{
-          response.writeHead(404).end();
+          response.writeHead(404);
+          response.end();
         }
-      }else if(ip!==null&&ip===remoteAddress&&path==='/update_certificate'){
+      }else if('127.0.0.1'===remoteAddress&&path==='/update_certificate'){
         (async ()=>{
           try{
-            await server.updateCertificate(hostname);
-            response.writeHead(200).end();
+            if(await server.updateCertificate(hostname)){
+              response.writeHead(200);
+              response.end();
+            }
+            else{
+              response.writeHead(500,{'Content-Type':'text/plain'});
+              response.end();
+            }
           }
           catch(err){
-            response.writeHead(500,{'Content-Type':'text/plain'}).end(err.message);
+            response.writeHead(500,{'Content-Type':'text/plain'});
+            response.end(err.message);
           }
         })();
       }else{
@@ -58,7 +60,8 @@ module.exports=(httpPort,httpsPort)=>{
         response.writeHead(
           301,
           { Location: redirect, 'Strict-Transport-Security': 'max-age=86400' }
-        ).end();
+        );
+        response.end();
       }
     }
   );
@@ -84,13 +87,16 @@ module.exports=(httpPort,httpsPort)=>{
           response,
           hostname,
           remoteAddress,
-          ip!==null&&ip===remoteAddress,
+          '127.0.0.1'===remoteAddress,
           server
         );
       }
       catch(err){
         if(response.headersSent) response.end();
-        else response.writeHead(500).end();
+        else{
+          response.writeHead(500);
+          response.end();
+        }
       }
     }
   );
@@ -164,13 +170,13 @@ module.exports=(httpPort,httpsPort)=>{
   /**
    * @async
    * @param {string} hostname
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>}
    */
   server.updateCertificate=async hostname=>{
-    if(!servers[hostname])return;
+    if(!servers[hostname])return false;
     const email=servers[hostname].acme.email;
     const hostnames=servers[hostname].hostnames;
-    if(!email)return;
+    if(!email)return false;
     const accountKey=await acme.forge.createPrivateKey();
     const [key,csr]=await acme.forge.createCsr(
       [hostnames.slice(0)].map(it=>{
@@ -227,6 +233,7 @@ module.exports=(httpPort,httpsPort)=>{
     });
     await fs.writeFile(servers[hostname].key.path,key);
     await fs.writeFile(servers[hostname].cert.path,cert);
+    return true;
   };
   if(!httpStarted){
     httpServer.listen(httpPort,err=>{
