@@ -138,7 +138,6 @@ const handler1 = (request,response,hostname,remoteAddress,serverInstance)=>{
     method: request.method.toLowerCase(),
     url: request.url,
     remoteAddress: remoteAddress,
-    local: local,
     server: serverInstance === server
   }));
   response.end();
@@ -240,6 +239,9 @@ describe('register domains', ()=>{
 
 describe('domain1', ()=>{
   describe('domain1.com', ()=>{
+    before(async()=>{
+      if(server.hostnames().length===0) await Promise.all(domains.map(it=>server.addServer(it)));
+    });
     it('http head request to domain1.com', async()=>{
       const response = await request(`http://domain1.com:${httpPort}`, Methods.head);
       assert.strictEqual(response.status, 301);
@@ -367,6 +369,9 @@ describe('domain1', ()=>{
   });
 });
 describe('domain2', ()=>{
+  before(async()=>{
+    if(server.hostnames().length===0) await Promise.all(domains.map(it=>server.addServer(it)));
+  });
   describe('domain2.com', ()=>{
     it('http head request to domain2.com', async()=>{
       const response = await request(`http://domain2.com:${httpPort}`, Methods.head);
@@ -393,6 +398,9 @@ describe('domain2', ()=>{
   });
 });
 describe('domain3', ()=>{
+  before(async()=>{
+    if(server.hostnames().length===0) await Promise.all(domains.map(it=>server.addServer(it)));
+  });
   describe('domain3.com', ()=>{
     it('http head request to domain3.com', async()=>{
       const response = await request(`http://domain3.com:${httpPort}`, Methods.head);
