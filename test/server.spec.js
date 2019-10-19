@@ -41,24 +41,25 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
   const j = url.indexOf('/', i+3);
   const authority = j===-1 ? url.substring(i+3) : url.substring(i+3,j);
   const path = j===-1 ? '/' : url.substring(j);
-  const [ request, close ] = (()=>{
+  new Promise((resolve,reject)=>{
     if(proto==='https'&&!disableHttp2){
-      try{
-        const session=http2.connect(`${proto}://${authority}`,{
-          ca:ca,
-          rejectUnauthorized:true,
-          requestCert:true,
-          agent:false
-        });
-      }catch(error){
-        reject(error);
-        return [ null, null ];
-      }
-      const request = session.request({
-        ':method': method.toUpperCase(),
-        ':path': path
+      const session=http2.connect(`${proto}://${authority}`,{
+        ca:ca,
+        rejectUnauthorized:true,
+        requestCert:true,
+        agent:false
       });
-      return [ request, ()=>session.close() ];
+      session.on('error',(error)=>{
+        reject(error);
+        session.close();
+      });
+      session.on('connect',()=>{
+        const request = session.request({
+          ':method': method.toUpperCase(),
+          ':path': path
+        });
+        resolve([ request, ()=>session.close() ]);
+      });
     }
     else{
       const k = authority.indexOf(':');
@@ -71,7 +72,7 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
           path: path,
           method: method.toUpperCase()
         });
-        return [ request, ()=>{} ];
+        resolve([ request, ()=>{} ]);
       }
       else{
         const port = k===-1 ? 443 : authority.substring(k+1);
@@ -85,45 +86,46 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
           requestCert: true,
           agent: false
         });
-        return [ request, ()=>{} ];
+        resolve([ request, ()=>{}, null ]);
       }
     }
-  })();
-  if (request === null) return;
-  const data = [];
-  let status = 0;
-  let headers = new Map();
-  let error = undefined;
-  request.on('error', e=>error=e);
-  request.on('response', it=>{
-    if(proto==='http'||disableHttp2){
-      status = it.statusCode;
-      Object.keys(it.headers).forEach(h=>{
-        headers.set(h,it.headers[h]);
-      });
-      it.on('data',it=>data.push(it));
-    }
-    else{
-      status = it[':status'];
-      Object.keys(it).forEach(h=>{
-        if(h[0]!==':') headers.set(h,it[h]);
-      });
-      request.on('data',it=>data.push(it));
+  }).then(result=>{
+    const [ request, close ] = result;
+    const data = [];
+    let status = 0;
+    let headers = new Map();
+    let error = undefined;
+    request.on('error', e=>error=e);
+    request.on('response', it=>{
+      if(proto==='http'||disableHttp2){
+        status = it.statusCode;
+        Object.keys(it.headers).forEach(h=>{
+          headers.set(h,it.headers[h]);
+        });
+        it.on('data',it=>data.push(it));
+      }
+      else{
+        status = it[':status'];
+        Object.keys(it).forEach(h=>{
+          if(h[0]!==':') headers.set(h,it[h]);
+        });
+        request.on('data',it=>data.push(it));
 
-    }
-  });
-  request.on('close', ()=>{
-    if (error) reject(error);
-    else resolve(
-      {
-        status: status,
-        headers: headers,
-        body: Buffer.concat(data)
       }
-    );
-    close();
-  });
-  request.setTimeout(1000).end();
+    });
+    request.on('close', ()=>{
+      if (error) reject(error);
+      else resolve(
+        {
+          status: status,
+          headers: headers,
+          body: Buffer.concat(data)
+        }
+      );
+      close();
+    });
+    request.setTimeout(1000).end();
+  }).catch(reject);
 });
 
 let server;
@@ -142,7 +144,7 @@ const handler1 = (request,response,hostname,remoteAddress,local,serverInstance)=
   response.end();
 };
 
-const handler2 = (request,response,hostname,remoteAddress,local,serverInstance)=>{
+const handler2 = (request,response,hostname)=>{
   if (hostname.indexOf('www.')===0){
     response.writeHead(301, { 'Location': `https://domain2.com:${httpsPort}${request.path||request.headers[':path']}` });
   }else response.writeHead(200);
@@ -206,8 +208,16 @@ describe('no domain defined', ()=>{
 });
 
 describe('register domains', ()=>{
-  it('', async()=>{
-    await Promise.all(domains.map(async it=>await server.addServer(it)));
+  domains.forEach((domain,i)=>{
+    describe(`${domain.hostnames[0]}`, ()=>{
+      it('addServer', async()=>{
+        await server.addServer(domain);
+        const hostnames = server.hostnames();
+        assert.strictEqual(hostnames.length, 2*(i+1));
+        assert.strictEqual('domain1.com', hostnames.find(it=>it==='domain1.com'));
+        assert.strictEqual('www.domain1.com', hostnames.find(it=>it==='www.domain1.com'));
+      });
+    });
   });
 });
 

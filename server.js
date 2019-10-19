@@ -114,7 +114,7 @@ module.exports=(httpPort,httpsPort)=>{
   /**
    * @returns {string[]}
    */
-  server.servernames=()=>servers.flatMap(it=>it.hostnames);
+  server.hostnames=()=>[...Object.values(servers).reduce((prev,cur)=>{cur.hostnames.forEach(it=>prev.add(it));return prev},new Set()).values()];
   /**
    * @async
    * @param {
