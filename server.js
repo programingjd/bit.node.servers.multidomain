@@ -23,6 +23,30 @@ module.exports=(httpPort,httpsPort)=>{
   const http01='/.well-known/acme-challenge/';
   const servers={};
   const server={};
+  /**
+   * @template T
+   * @param {http2.Http2ServerRequest} request
+   * @param {http2.Http2ServerResponse} response
+   * @param {string} hostname
+   * @param {string} remoteAddress,
+   * @param {array<{
+   *   accept:function(
+   *     request:http2.Http2ServerRequest,
+   *     response:http2.Http2ServerResponse,
+   *     hostname:string,
+   *     remoteAddress:string
+   *   ):T,
+   *   handle(acceptor:T)}>
+   * } handlers
+   */
+  const defaultHandler=(request,response,hostname,remoteAddress,handlers)=>{
+    for(const handler of handlers){
+      const accepted=handler.accept(request,response,hostname,remoteAddress);
+      if(accepted) return handler.handle(accepted);
+    }
+    response.writeHead(404);
+    response.end();
+  };
   const httpServer=http.createServer(
     (request,response)=>{
       const remoteAddress=request.socket.remoteAddress.replace(/^::ffff:/,'');
@@ -82,15 +106,17 @@ module.exports=(httpPort,httpsPort)=>{
       const remoteAddress=request.socket.remoteAddress.replace(/^::ffff:/,'');
       const hostname=request.socket.servername;
       try{
-        servers[hostname].handler(
+        const it=servers[hostname];
+        it.handler(
           request,
           response,
           hostname,
           remoteAddress,
-          server
+          it.handlers
         );
       }
       catch(err){
+        console.log(err);
         if(response.headersSent) response.end();
         else{
           response.writeHead(500);
@@ -116,15 +142,42 @@ module.exports=(httpPort,httpsPort)=>{
   server.hostnames=()=>[...Object.values(servers).reduce((prev,cur)=>{cur.hostnames.forEach(it=>prev.add(it));return prev},new Set()).values()];
   /**
    * @async
+   * @template T
    * @param {
    * {
    *   handler:function(
-   *     request:http2.Http2ServerRequest?,
-   *     response:http2.Http2ServerResponse?,
-   *     hostname:string?,
-   *     remoteAddress:string?,
-   *     server:MultiDomainServer?
+   *     request:http2.Http2ServerRequest,
+   *     response:http2.Http2ServerResponse,
+   *     hostname:string,
+   *     remoteAddress:string,
+   *     handlers:array<{
+   *       accept:function(
+   *         request:http2.Http2ServerRequest,
+   *         response:http2.Http2ServerResponse,
+   *         hostname:string,
+   *         remoteAddress:string,
+   *         handlers:array<{
+   *           accept:function(
+   *             request:http2.Http2ServerRequest,
+   *             response:http2.Http2ServerResponse,
+   *             hostname:string,
+   *             remoteAddress:string
+   *           ):T,
+   *           handle(acceptor:T)
+   *         }>
+   *       ):T,
+   *       handle(acceptor:T)
+   *     }>
    *   ),
+   *   handlers:array<{
+   *     accept:function(
+   *       request:http2.Http2ServerRequest,
+   *       response:http2.Http2ServerResponse,
+   *       hostname:string,
+   *       remoteAddress:string
+   *     ):T,
+   *     handle(acceptor:T)
+   *   }>,
    *   acme:{email:string},
    *   hostnames:string[],
    *   cert:{path:string},
@@ -147,7 +200,8 @@ module.exports=(httpPort,httpsPort)=>{
           acme: {
             email: (server.acme||{}).email
           },
-          handler: server.handler,
+          handler: server.handler||defaultHandler,
+          handlers: server.handlers||[],
           context: tls.createSecureContext({
             key: keyData,
             cert: certData,

@@ -130,7 +130,7 @@ const request=(url,method=Methods.get,disableHttp2=false)=>new Promise((resolve,
 
 let server;
 
-const handler1 = (request,response,hostname,remoteAddress,serverInstance)=>{
+const handler1 = (request,response,hostname,remoteAddress,handlers)=>{
   response.writeHead(200, { 'Content-Type': 'application/json', 'X-Test': 'test' });
   response.write(JSON.stringify({
     name: 'domain1',
@@ -138,17 +138,32 @@ const handler1 = (request,response,hostname,remoteAddress,serverInstance)=>{
     method: request.method.toLowerCase(),
     url: request.url,
     remoteAddress: remoteAddress,
-    server: serverInstance === server
+    handlers: handlers.length
   }));
   response.end();
 };
 
-const handler2 = (request,response,hostname)=>{
-  if (hostname.indexOf('www.')===0){
-    response.writeHead(301, { 'Location': `https://domain2.com:${httpsPort}${request.path||request.headers[':path']}` });
-  }else response.writeHead(200);
-  response.end();
-};
+const handlers2 = [
+  {
+    accept: (request,response,hostname)=>{
+      if(hostname.indexOf('www.')===0){
+        return ()=>{
+          response.writeHead(301, { 'Location': `https://domain2.com:${httpsPort}${request.path||request.headers[':path']}` });
+          response.end();
+        };
+      }
+      if(request.url==='/test'){
+        return ()=>{
+          response.writeHead(200);
+          response.end();
+        };
+      }
+    },
+    handle: acceptor=>{
+      acceptor();
+    }
+  }
+];
 
 const handler3 = (request,response,hostname)=>{
   if(hostname.indexOf('www.')===0){
@@ -175,7 +190,7 @@ const domain2 = {
   cert: {
     path: 'test/domain2.cert'
   },
-  handler: handler2
+  handlers: handlers2
 };
 const domain3 = {
   hostnames: [ 'domain3.com', 'www.domain3.com' ],
@@ -214,7 +229,18 @@ before(async()=>{
   ca.push(await fs.readFile('test/ca.cert'));
 });
 
+describe('ports',()=>{
+  it('http port', ()=>{
+    assert.strictEqual(server.httpPort, httpPort);
+  });
+  it('https port', ()=>{
+    assert.strictEqual(server.httpsPort, httpsPort);
+  });
+});
 describe('no domain defined', ()=>{
+  it('hostnames',()=>{
+    assert.strictEqual(server.hostnames.length, 0);
+  });
   it('http head request to domain1.com', async()=>{
     await assert.rejects(()=>request(`http://domain1.com:${httpPort}`, Methods.head));
   });
@@ -274,6 +300,8 @@ describe('domain1', ()=>{
       assert.strictEqual(body.hostname, 'domain1.com');
       assert.strictEqual(body.method, 'get');
       assert.strictEqual(body.url, '/fake/path');
+      assert.strictEqual(body.remoteAddress, '127.0.0.1');
+      assert.strictEqual(body.handlers, 0);
     });
     it('https (HTTP1.1) get request to domain1.com/fake/path', async()=>{
       const response = await request(`https://domain1.com:${httpsPort}/fake/path`, Methods.get, true);
@@ -285,6 +313,8 @@ describe('domain1', ()=>{
       assert.strictEqual(body.hostname, 'domain1.com');
       assert.strictEqual(body.method, 'get');
       assert.strictEqual(body.url, '/fake/path');
+      assert.strictEqual(body.remoteAddress, '127.0.0.1');
+      assert.strictEqual(body.handlers, 0);
     });
     describe('update certificate', ()=>{
       it('call to update_certificate should fail', async()=>{
@@ -326,6 +356,8 @@ describe('domain1', ()=>{
       assert.strictEqual(body.hostname, 'www.domain1.com');
       assert.strictEqual(body.method, 'get');
       assert.strictEqual(body.url, '/');
+      assert.strictEqual(body.remoteAddress, '127.0.0.1');
+      assert.strictEqual(body.handlers, 0);
     });
     it('https (HTTP2) get request to www.domain1.com/', async()=>{
       const response = await request(`https://www.domain1.com:${httpsPort}/`, Methods.get);
@@ -337,6 +369,8 @@ describe('domain1', ()=>{
       assert.strictEqual(body.hostname, 'www.domain1.com');
       assert.strictEqual(body.method, 'get');
       assert.strictEqual(body.url, '/');
+      assert.strictEqual(body.remoteAddress, '127.0.0.1');
+      assert.strictEqual(body.handlers, 0);
     });
     it('https (HTTP2) get request to www.domain1.com/fake/path', async()=>{
       const response = await request(`https://www.domain1.com:${httpsPort}/fake/path`, Methods.get);
@@ -348,6 +382,8 @@ describe('domain1', ()=>{
       assert.strictEqual(body.hostname, 'www.domain1.com');
       assert.strictEqual(body.method, 'get');
       assert.strictEqual(body.url, '/fake/path');
+      assert.strictEqual(body.remoteAddress, '127.0.0.1');
+      assert.strictEqual(body.handlers, 0);
     });
     it('https (HTTP1.1) get request to www.domain1.com/fake/path', async()=>{
       const response = await request(`https://www.domain1.com:${httpsPort}/fake/path`, Methods.get, true);
@@ -359,6 +395,8 @@ describe('domain1', ()=>{
       assert.strictEqual(body.hostname, 'www.domain1.com');
       assert.strictEqual(body.method, 'get');
       assert.strictEqual(body.url, '/fake/path');
+      assert.strictEqual(body.remoteAddress, '127.0.0.1');
+      assert.strictEqual(body.handlers, 0);
     });
     describe('update certificate', ()=>{
       it('call to update_certificate should fail', async()=>{
@@ -380,8 +418,11 @@ describe('domain2', ()=>{
     });
     it('https get request to domain2.com', async()=>{
       const response = await request(`https://domain2.com:${httpsPort}`, Methods.get);
+      assert.strictEqual(response.status, 404);
+    });
+    it('https get request to domain2.com/test', async()=>{
+      const response = await request(`https://domain2.com:${httpsPort}/test`, Methods.get);
       assert.strictEqual(response.status, 200);
-      assert.strictEqual(response.body.length, 0);
     });
   });
   describe('www.domain2.com', ()=>{
@@ -432,6 +473,14 @@ describe('letsencrypt', ()=>{
     it('http get call to .well-known/acme-challenge/token', async()=>{
       const response = await request(`http://domain1.com:${httpPort}/.well-known/acme-challenge/token`, Methods.get);
       assert.strictEqual(response.status, 404);
+    });
+  });
+  describe('certificate update', ()=>{
+    it('updateCertificate("wrong.domain.com")',async()=>{
+      assert.strictEqual(await server.updateCertificate('wrong.domain.com'), false);
+    });
+    it('updateCertificate("domain1.com")',async()=>{
+      assert.strictEqual(await server.updateCertificate('domain1.com'), false);
     });
   });
 });

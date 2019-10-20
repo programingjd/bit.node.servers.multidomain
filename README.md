@@ -65,21 +65,29 @@ The server object has these properties:
   
     the email of a [Let's Encrypt](https://letsencrypt.org) account
 
-  - `handler` (required)
+  - `handler` (optional)
   
     the function called to handle the requests
     
+  - `handlers` (optional)
+  
+    an array of handler objects
     
 
-The handler function has these parameters:
+The default `handler` loops through the array of handlers (accessible through `server.handlers`).
+The first one that accepts the request is used to handle that request.
+If no handler accepts the request, then a `404 NOT FOUND` response is sent.
+
+You can override this behaviour by providing your own handler function.
+It takes these parameters:
 
   - `request`
   
-    the request object
+    the request object (`Http2ServerRequest`)
     
   - `response`
   
-    the response object
+    the response object (`Http2ServerResponse`)
     
   - `hostname`
   
@@ -90,10 +98,43 @@ The handler function has these parameters:
     the ip address the request originates from 
     (`'127.0.0.1'` for a request made from the same host)
 
-  - `server`
+  - `handlers`
   
-    the (multi domain) server instance
+    the array of handlers supplied through the server object `handlers` property
+
+
+Handler objects have two required properties:
+
+  - `accept`
   
+    a function that returns `null` when this handler cannot handle the request, but returns an
+    object with all the information needed to handle the request if it can
+    
+    its parameters are the same as the server's main `handle` function except that the list of
+    handlers is missing:
+    
+    - `request`
+    
+      the request object (`Http2ServerRequest`)
+      
+    - `response`
+    
+      the response object (`Http2ServerResponse`)
+      
+    - `hostname`
+    
+      the hostname from the request url
+   
+    - `remoteAddress`
+    
+      the ip address the request originates from 
+      (`'127.0.0.1'` for a request made from the same host)
+      
+   
+  - `handle`
+  
+    the function responsible for handling the request, which takes the result of the `accept` call
+    as parameter
     
 ## Certificate updates
 
@@ -112,6 +153,15 @@ The handler function has these parameters:
   
   This endpoint returns a `200 OK` response when the update succeeds and a `500 Internal Server Error`
   when it doesn't.
+  
+  ---
+  
+  You can also trigger a certificate update from code by using the `updateCertificate` async function
+  on the server instance. 
+  
+  It takes one parameter: `hostname`.
+  
+  It returns `true` when the update succeeds and `false` when it doesn't.
   
   
 ## Running the server with Systemd
