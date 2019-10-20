@@ -28,5 +28,10 @@
     "coveralls": "^3.0.6",
     "mocha": "^6.2.2",
     "nyc": "^14.1.1"
+  },
+  "bit": {
+    "env": {},
+    "componentsDefaultDirectory": "components/{name}",
+    "packageManager": "npm"
   }
 }
