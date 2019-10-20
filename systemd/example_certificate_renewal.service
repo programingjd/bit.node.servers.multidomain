@@ -1,0 +1,10 @@
+[Unit]
+Description=mydomain.com certificate renewal
+Wants=example_certificate_renewal.timer
+
+[Service]
+ExecStart=/usr/bin/curl "http://mydomain.com/update_certificate"
+WorkingDirectory=/home/admin
+
+[Install]
+WantedBy=multi-user.target

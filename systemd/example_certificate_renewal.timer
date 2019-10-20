@@ -1,0 +1,13 @@
+[Unit]
+Description=Runs mydomain.com certificate renewal every week
+Requires=example_certificate_renewal.service
+
+[Timer]
+Unit=example_certificate_renewal.service
+OnBootSec=5min
+OnUnitInactiveSec=1w
+RandomizedDelaySec=12h
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target

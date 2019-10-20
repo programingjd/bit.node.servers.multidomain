@@ -1,0 +1,16 @@
+[Unit]
+Description=nodejs multiserver
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/home/admin/multiserver
+ExecStart=/usr/bin/node example.js
+NonBlocking=true
+Restart=on-failure
+RestartSec=15s
+
+[Install]
+WantedBy=multi-user.target
