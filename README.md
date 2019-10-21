@@ -214,31 +214,31 @@ Handler objects have two required properties:
   
   Domain1CertificateRenewal.service
   ```
-    [Unit]
-    Description=domain1.com certificate renewal
-    Wants=Domain1CertificateRenewal.timer
-    
-    [Service]
-    ExecStart=/usr/bin/curl "http://domain1.com/update_certificate"
-    WorkingDirectory=/home/admin
-    
-    [Install]
-    WantedBy=multi-user.target
+  [Unit]
+  Description=domain1.com certificate renewal
+  Wants=Domain1CertificateRenewal.timer
+
+  [Service]
+  ExecStart=/usr/bin/curl "http://domain1.com/update_certificate"
+  WorkingDirectory=/home/admin
+
+  [Install]
+  WantedBy=multi-user.target
   ```
   
   Domain1CertificateRenewal.timer
   ```
-    [Unit]
-    Description=Runs domain1.com certificate renewal every week
-    Requires=Domain1CertificateRenewal.service
-    
-    [Timer]
-    Unit=Domain1CertificateRenewal.service
-    OnBootSec=5min
-    OnUnitInactiveSec=1w
-    RandomizedDelaySec=12h
-    AccuracySec=1h
-    
-    [Install]
-    WantedBy=timers.target
+  [Unit]
+  Description=Runs domain1.com certificate renewal every week
+  Requires=Domain1CertificateRenewal.service
+
+  [Timer]
+  Unit=Domain1CertificateRenewal.service
+  OnBootSec=5min
+  OnUnitInactiveSec=1w
+  RandomizedDelaySec=12h
+  AccuracySec=1h
+
+  [Install]
+  WantedBy=timers.target
   ```
