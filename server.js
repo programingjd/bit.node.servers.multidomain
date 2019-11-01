@@ -80,7 +80,7 @@ module.exports=(httpPort,httpsPort)=>{
           }
         })();
       }else{
-        const redirect=`https://${hostname}${httpsPort===443||typeof httpsPort==='object'?'':':'+httpsPort}${path}`;
+        const redirect=`https://${hostname}${(httpsPort===443||typeof httpsPort==='object')?'':':'+httpsPort}${path}`;
         response.writeHead(
           301,
           { Location: redirect, 'Strict-Transport-Security': 'max-age=86400' }
