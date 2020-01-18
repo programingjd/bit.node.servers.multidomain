@@ -2,6 +2,7 @@ const fs=require('fs').promises;
 const http=require('http');
 const http2=require('http2');
 const tls=require('tls');
+const dns=require('dns');
 const acme=require('acme-client');
 
 const systemdFirstSocket=()=>{
@@ -9,6 +10,24 @@ const systemdFirstSocket=()=>{
 };
 const systemdSecondSocket=()=>{
   if(process.env.LISTEN_FDS) return { fd: 4 };
+};
+
+const addr=it=>{
+  if(it.length<5) return null;
+  if(it.charAt(0)===':'&&it.length>13&&it.charAt(1)===':'&&it.charAt(2)==='f'&&it.charAt(3)==='f'&&
+     it.charAt(4)==='f'&&it.charAt(5)==='f'&&it.charAt(6)===':'&&
+     (it.charAt(8)==='.'||it.charAt('9')==='.'||it.charAt('10')==='.')) return it.substring(7);
+  return it;
+};
+const noPort=it=>{
+  const n=it.length-1;
+  if(n<2) return it;   // a:1  n=2
+  for(let i=1;i<6&&i<n;++i){
+    const c=it.charAt(n-i);
+    if(c===':') return it.substring(0,n-i);
+    if(c<0||c>9) return it;
+  }
+  return it;
 };
 
 /**
@@ -20,6 +39,7 @@ const systemdSecondSocket=()=>{
 module.exports=(httpPort,httpsPort)=>{
   if(!httpPort) httpPort=systemdFirstSocket()||80;
   if (!httpsPort) httpsPort=systemdSecondSocket()||443;
+  const localAddresses=new Set(['127.0.0.1','::1']);
   const http01='/.well-known/acme-challenge/';
   const servers={};
   const server={};
@@ -49,8 +69,8 @@ module.exports=(httpPort,httpsPort)=>{
   };
   const httpServer=http.createServer(
     (request,response)=>{
-      const remoteAddress=request.socket.remoteAddress.replace(/^::ffff:/,'');
-      const hostname=request.headers.host.replace(/:[0-9]+$/,'');
+      const remoteAddress=addr(request.socket.remoteAddress);
+      const hostname=noPort(request.headers.host);
       if(!servers[hostname]) return request.socket.end();
       const path=request.url;
       if(path.indexOf(http01)===0){
@@ -62,10 +82,10 @@ module.exports=(httpPort,httpsPort)=>{
           response.writeHead(404);
           response.end();
         }
-      }else if('127.0.0.1'===remoteAddress&&path==='/update_certificate'){
+      }else if(localAddresses.has(remoteAddress)&&path==='/update_certificate'){
         (async ()=>{
           try{
-            if(await server.updateCertificate(hostname)){
+            if(await server.updateCertificate(server[hostname].hostnames[0])){
               response.writeHead(200);
               response.end();
             }
@@ -103,7 +123,7 @@ module.exports=(httpPort,httpsPort)=>{
     },
     (request,response)=>{
       response.sendDate=true;
-      const remoteAddress=request.socket.remoteAddress.replace(/^::ffff:/,'');
+      const remoteAddress=addr(request.socket.remoteAddress);
       const hostname=request.socket.servername;
       try{
         const it=servers[hostname];
@@ -128,6 +148,11 @@ module.exports=(httpPort,httpsPort)=>{
   httpsServer.on('secureConnection',(socket)=>{
     if(!servers[socket.servername]) socket.disconnect();
   });
+  /**
+   * @param {string} address
+   * @returns {boolean}
+   */
+  server.isLocal=address=>localAddresses.has(address);
   /**
    * @type {number}
    */
@@ -189,6 +214,18 @@ module.exports=(httpPort,httpsPort)=>{
     const certData=await fs.readFile(server.cert.path);
     await Promise.all(
       server.hostnames.map(async hostname=>{
+        await new Promise(r=>{
+          dns.resolve4(hostname,(err,addresses)=>{
+            if(!err) addresses.forEach(it=>localAddresses.add(addr(it)));
+            r();
+          });
+        });
+        await new Promise(r=>{
+          dns.resolve6(hostname,(err,addresses)=>{
+            if(!err) addresses.forEach(it=>localAddresses.add(addr(it)));
+            r();
+          });
+        });
         servers[hostname]={
           hostnames: server.hostnames,
           key: {
