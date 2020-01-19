@@ -85,7 +85,7 @@ module.exports=(httpPort,httpsPort)=>{
       }else if(localAddresses.has(remoteAddress)&&path==='/update_certificate'){
         (async ()=>{
           try{
-            if(await server.updateCertificate(server[hostname].hostnames[0])){
+            if(await server.updateCertificate(servers[hostname].hostnames[0])){
               response.writeHead(200);
               response.end();
             }
