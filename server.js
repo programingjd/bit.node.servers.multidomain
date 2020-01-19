@@ -164,7 +164,11 @@ module.exports=(httpPort,httpsPort)=>{
   /**
    * @returns {string[]}
    */
-  server.hostnames=()=>[...Object.values(servers).reduce((prev,cur)=>{cur.hostnames.forEach(it=>prev.add(it));return prev},new Set()).values()];
+  server.hostnames=()=>{
+    const set=new Set();
+    Object.values(servers).forEach(it=>it.hostnames.forEach(it=>set.add(it)));
+    return [...set.values()];
+  }
   /**
    * @async
    * @template T
@@ -212,6 +216,27 @@ module.exports=(httpPort,httpsPort)=>{
   server.addServer=async server=>{
     const keyData=await fs.readFile(server.key.path);
     const certData=await fs.readFile(server.cert.path);
+    server.hostnames.map(hostname=>{
+      return servers[hostname]={
+        hostnames: server.hostnames,
+        key: {
+          path: server.key.path
+        },
+        cert: {
+          path: server.cert.path
+        },
+        acme: {
+          email: (server.acme||{}).email
+        },
+        handler: server.handler||defaultHandler,
+        handlers: server.handlers||[],
+        context: tls.createSecureContext({
+          key: keyData,
+          cert: certData,
+          minVersion: 'TLSv1.2'
+        })
+      };
+    });
     await Promise.all(
       server.hostnames.map(async hostname=>{
         await new Promise(r=>{
@@ -226,26 +251,7 @@ module.exports=(httpPort,httpsPort)=>{
             r();
           });
         });
-        servers[hostname]={
-          hostnames: server.hostnames,
-          key: {
-            path: server.key.path
-          },
-          cert: {
-            path: server.cert.path
-          },
-          acme: {
-            email: (server.acme||{}).email
-          },
-          handler: server.handler||defaultHandler,
-          handlers: server.handlers||[],
-          context: tls.createSecureContext({
-            key: keyData,
-            cert: certData,
-            minVersion: 'TLSv1.2'
-          })
-        };
-      })
+      }),
     );
   };
   let httpStarted=false;
