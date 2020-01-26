@@ -249,7 +249,8 @@ describe('no domain defined', ()=>{
   });
 });
 
-describe('register domains', ()=>{
+describe('register domains', function(){
+  this.timeout(5000);
   domains.forEach((domain,i)=>{
     describe(`${domain.hostnames[0]}`, ()=>{
       it('addServer', async()=>{
