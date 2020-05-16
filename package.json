@@ -1,6 +1,6 @@
 {
   "name": "bit.node.servers.multidomain",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "nodejs http2 server with multi domain support",
   "main": "server.js",
   "scripts": {
