@@ -43,6 +43,14 @@ module.exports=(httpPort,httpsPort)=>{
   const http01='/.well-known/acme-challenge/';
   const servers={};
   const server={};
+  const host=request=>{
+    const host=request.headers.host;
+    if(host===undefined){
+      const i0=request.url.indexOf('http://');
+      if(i0===-1) return null;
+      return new URL(request.url).hostname;
+    } else return noPort(host.toLowerCase());
+  };
   /**
    * @template T
    * @param {http2.Http2ServerRequest} request
@@ -70,7 +78,7 @@ module.exports=(httpPort,httpsPort)=>{
   const httpServer=http.createServer(
     (request,response)=>{
       const remoteAddress=addr(request.socket.remoteAddress);
-      const hostname=noPort(request.headers.host);
+      const hostname=host(request);
       if(!servers[hostname]) return request.socket.end();
       const path=request.url;
       if(path.indexOf(http01)===0){
