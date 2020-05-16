@@ -29,7 +29,14 @@ const noPort=it=>{
   }
   return it;
 };
-
+const host=request=>{
+  const host=request.headers.host;
+  if(host===undefined){
+    const i0=request.url.indexOf('http://');
+    if(i0!==0) return null;
+    try{return new URL(request.url).hostname;}catch(e){return null;}
+  } else return noPort(host.toLowerCase());
+};
 /**
  * @namespace MultiDomainServer
  * @param {number} [httpPort=80]
@@ -43,14 +50,6 @@ module.exports=(httpPort,httpsPort)=>{
   const http01='/.well-known/acme-challenge/';
   const servers={};
   const server={};
-  const host=request=>{
-    const host=request.headers.host;
-    if(host===undefined){
-      const i0=request.url.indexOf('http://');
-      if(i0===-1) return null;
-      return new URL(request.url).hostname;
-    } else return noPort(host.toLowerCase());
-  };
   /**
    * @template T
    * @param {http2.Http2ServerRequest} request
