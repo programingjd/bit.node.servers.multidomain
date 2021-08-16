@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "test": "npx nyc mocha test/server.spec.js",
-    "coverage": "npx nyc report --reporter=text-lcov | coveralls"
+    "coverage": "npx nyc report --reporter=text-lcov | coveralls",
+    "tag": "npx bit tag --all 1.0.6",
+    "export": "npx bit export"
   },
   "repository": {
     "type": "git",
