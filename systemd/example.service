@@ -1,14 +1,49 @@
 [Unit]
-Description=nodejs multiserver
-After=network.target
+Description=Multidomain Server
+Wants=example.socket
+After=example.socket
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+StandardInput=fd:example.socket
+StandardError=journal
+
+DynamicUser=true
+SupplementaryGroups=www-data
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet==
+RestrictNamespaces=true
+StateDirectory=certs
+RestrictAddressFamilies=AF_UNIX
+RestrictAddressFamilies=~AF_UNIX
+PrivateDevices=true
+PrivateUsers=true
+PrivateNetwork=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+MemoryDenyWriteExecute=true
+UMask=077
+ProtectHostname=true
+SystemCallFilter=@system-service
+DevicePolicy=strict
+DeviceAllow=/dev/null rw
+DeviceAllow=/dev/random r
+DeviceAllow=/dev/urandom r
+
 WorkingDirectory=/home/admin/multiserver
 ExecStart=/usr/bin/node example.js
-NonBlocking=true
 Restart=on-failure
 RestartSec=15s
 

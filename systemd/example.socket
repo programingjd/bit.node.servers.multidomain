@@ -1,7 +1,11 @@
+[Unit]
+Description=Multidomain Server Socket Activation
+
 [Socket]
 ListenStream=80
 ListenStream=443
 NoDelay=true
+Accept=no
 
 [Install]
 WantedBy=sockets.target

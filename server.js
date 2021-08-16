@@ -121,7 +121,7 @@ module.exports=(httpPort,httpsPort)=>{
       allowHTTP1: true,
       key: null,
       cert: null,
-      minVersion: 'TLSv1.2',
+      minVersion: 'TLSv1.3',
       SNICallback: (domain,cb)=>{
         const server=servers[domain];
         if(server) cb(null,server.context);
@@ -240,7 +240,7 @@ module.exports=(httpPort,httpsPort)=>{
         context: tls.createSecureContext({
           key: keyData,
           cert: certData,
-          minVersion: 'TLSv1.2'
+          minVersion: 'TLSv1.3'
         })
       };
     });
