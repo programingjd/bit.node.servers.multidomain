@@ -1,7 +1,9 @@
 language: node_js
 node_js:
-  - "10.16.3"
-  - "11.15.0"
+  - "10.24.1"
+  - "12.9.1"
+  - "14.17.5"
+  - "16.6.2"
   - "node"
 install: npm install --ignore-scripts
 script: npm test
