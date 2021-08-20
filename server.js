@@ -216,13 +216,15 @@ module.exports=(httpPort,httpsPort)=>{
    *   }>,
    *   acme:{email:string},
    *   hostnames:string[],
-   *   cert:{path:string},
-   *   key:{path:string}}
+   *   cert:{path:string,fallback:?{path:string}},
+   *   key:{path:string,fallback:?{path:string}}}
    * } server
    */
   server.addServer=async server=>{
-    const keyData=await fs.readFile(server.key.path);
-    const certData=await fs.readFile(server.cert.path);
+    const keyData=await fs.readFile(server.key.path).catch(_=>null).
+      then(async it=>it||await fs.readFile(server.key.fallback.path));
+    const certData=await fs.readFile(server.cert.path).catch(_=>null).
+      then(async it=>it||await fs.readFile(server.cert.fallback.path));
     server.hostnames.map(hostname=>{
       return servers[hostname]={
         hostnames: server.hostnames,

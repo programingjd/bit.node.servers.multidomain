@@ -195,10 +195,16 @@ const domain2 = {
 const domain3 = {
   hostnames: [ 'domain3.com', 'www.domain3.com' ],
   key: {
-    path: 'test/domain3.key'
+    path: 'test/domain3_missing.key',
+    fallback: {
+      path: 'test/domain3.key',
+    }
   },
   cert: {
-    path: 'test/domain3.cert'
+    path: 'test/domain3_missing.cert',
+    fallback: {
+      path: 'test/domain3.cert',
+    }
   },
   handler: handler3
 };
