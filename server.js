@@ -264,11 +264,11 @@ module.exports=(httpPort,httpsPort)=>{
     );
   };
   let httpStarted=false;
-  let httpssStarted=false;
+  let httpsStarted=false;
   server.close=()=>{
     const promises=[new Promise(r=>r())];
     if(!httpStarted) httpStarted=true; else promises.push(new Promise(r=>httpServer.close(r)));
-    if(!httpssStarted) httpssStarted=true; promises.push(new Promise(r=>httpsServer.close(r)));
+    if(!httpsStarted) httpsStarted=true; promises.push(new Promise(r=>httpsServer.close(r)));
     return Promise.all(promises);
   };
   /**
@@ -345,10 +345,10 @@ module.exports=(httpPort,httpsPort)=>{
       if(httpStarted) httpServer.close(); else httpStarted=true;
     });
   }
-  if(!httpssStarted){
+  if(!httpsStarted){
     httpsServer.listen(httpsPort,err=>{
       if(err) return console.log(err);
-      if(httpssStarted) httpsServer.close(); else httpssStarted=true;
+      if(httpsStarted) httpsServer.close(); else httpsStarted=true;
     });
   }
   Object.freeze(server);
